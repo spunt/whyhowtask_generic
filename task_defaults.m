@@ -3,7 +3,7 @@ function defaults = task_defaults
 
 % Screen Resolution
 %==========================================================================
-defaults.screenres      = [1280 800];   % recommended screen resolution (if
+defaults.screenres      = [1280 960];   % recommended screen resolution (if
                                         % not supported by monitor, will
                                         % default to current resolution)
 
