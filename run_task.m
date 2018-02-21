@@ -1,4 +1,4 @@
-function run_task1(test_tag)
+function run_task(test_tag)
     % RUN_TASK  Run LOI
     %
     %   USAGE: run_task([test_tag])
@@ -34,7 +34,7 @@ function run_task1(test_tag)
     trigger = KbName(defaults.trigger);
 
     %% Load Design and Setup Seeker Variable %%
-    design = load(fullfile(defaults.path.design, 'design1.mat'))
+    design = load(fullfile(defaults.path.design, 'design.mat'))
     blockSeeker = design.blockSeeker;
     trialSeeker = design.trialSeeker;
     trialSeeker(:,6:9) = 0;
