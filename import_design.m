@@ -8,15 +8,13 @@ function import_design(inputfile, dryrun)
     def = task_defaults;
     if iscell(inputfile), inputfile = char(inputfile); end
 
-    % Check Paths
-    checkdirs(struct2cell(def.path));
+
     % Load Trial Definition
-    [~,inputname] = fileparts(inputfile);
     [trialSeeker,~,df] = xlsread(inputfile);
      % 1 - block
      % 2 - trial
      % 3 - cond
-     % 4 - answer (1:yes, 2:no)
+     % 4 - answer (1:yes, 2:no)512112
      % 5 - onset
      % 6 - image
      % 7 - question
@@ -30,13 +28,13 @@ function import_design(inputfile, dryrun)
     preblockcues         = stimcols(blockidx,2);
     isicues              = stimcols(blockidx,3);
     qim                  = stimcols(:,[2 1]);
-    blockSeeker          = trialSeeker(blockidx,[1 3 5]);
+    blockSeeker          = trialSeeker(blockidx,[1 3]);
     pretrial1dur         = def.preblockquestionDur + def.firstISI;
 
 
     % Check for raw images and make slides for presentation
     stim = make_slides(def.path.rawimages, unique(qim(:,2)), def);
-    
+
 
     % Check Trials
     trialons = reshape(trialSeeker(:,end), ntrials, nblocks);
@@ -46,38 +44,45 @@ function import_design(inputfile, dryrun)
     if any(tooshortidx)
         fprintf('The following blocks have trials with onsets spaced shorter than the min stim onset asynchrony of %2.2f secs:', minsoa)
         disp(find(any(tooshortidx))');
-%         return
+        return
     end
 
     % Check Blocks
+    blockSeeker(:,3) = trialons(1,:) - pretrial1dur;
     minboa = pretrial1dur + ((def.maxDur + def.inblockreminderDur)*(ntrials-1));
     blockdiffons = diff(blockSeeker(:,3));
     tooshortidx = blockdiffons < minboa;
     if any(tooshortidx)
         fprintf('The following block''s onsets occur shorter than the min block onset asynchrony of %2.2f secs:', minboa)
         disp(find(tooshortidx));
-%         return
+        return
     end
-
-    blockSeeker(:,end)   = blockSeeker(:,end) - pretrial1dur;
-    blockSeeker(:,end+1) = 1:nblocks;
-    trialSeeker(:,end+1) = trialSeeker(:,end);
-    trialSeeker(:,end-1) = 1:size(trialSeeker,1);
-    totalTime = trialSeeker(end,6) + def.maxDur + def.endduration;
+    blockSeeker(:,4) = 1:nblocks;
+    trialSeeker(:,5) = trialSeeker(:,end);
+    totalTime = trialSeeker(end,5) + def.maxDur + def.endduration;
     numTRs              = ceil(totalTime/def.TR);
     totalTime           = def.TR*numTRs;
     fprintf('\nTotal Run Time: %d secs (%d TRs)', totalTime, numTRs);
     fprintf('\nN Blocks: %d', nblocks);
     fprintf('\nN Trials/Block: %d\n', ntrials);
+
     if ~dryrun
-        
-        
+        checkdirs({def.path.stim def.path.design})
         stimfile = fullfile(def.path.stim, 'stimuli.mat');
         save(stimfile, 'stim');
         fprintf('\nPreloaded stimuli written to: %s\n', stimfile)
-        designfile = fullfile(def.path.design, sprintf('%s.mat', inputname));
-        save(designfile, 'trialSeeker', 'blockSeeker', 'qim', 'preblockcues', 'isicues');
+
+        designfile = fullfile(def.path.design, 'design.mat');
+        save(designfile, 'totalTime', 'numTRs', 'trialSeeker', 'blockSeeker', 'qim', 'preblockcues', 'isicues');
         fprintf('Design written to: %s\n', designfile)
+        [~,inputname, inputext] = fileparts(inputfile);
+
+        rawdesignfile = fullfile(def.path.design, [inputname inputext]);
+        if ~exist(rawdesignfile)
+            movefile(inputfile, rawdesignfile)
+            fprintf('Raw design file moved to: %s\n', rawdesignfile)
+        end
+
     end
 % SUBFUNCTIONS
 function checkdirs(thedirs)

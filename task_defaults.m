@@ -27,11 +27,12 @@ defaults.TR             = 1;      % Your TR (in secs)
 % Paths
 %==========================================================================
 defaults.path.base      = fileparts(mfilename('fullpath'));
-defaults.path.data      = fullfile(defaults.path.base, 'data');
+defaults.path.design    = fullfile(defaults.path.base, 'design_order1');
 defaults.path.rawimages = fullfile(defaults.path.base, 'raw_stimuli');
-% defaults.path.rawimages = '/Users/bobspunt/Github/research-projects/conte-renewal-lois/stimuli';
-defaults.path.stim      = fullfile(defaults.path.base, 'slides');
-defaults.path.design    = fullfile(defaults.path.base, 'design');
+defaults.path.stim      = fullfile(defaults.path.base, 'stimuli');
+defaults.path.data      = fullfile(defaults.path.base, 'data');
+
+
 
 
 % Response Keys
@@ -50,6 +51,7 @@ defaults.valid_keys     = {'1!' '2@' '3#' '4$'}; % valid response keys
 
 % Text Display Parameters
 %==========================================================================
+defaults.question_splitby =  {'Is the person ' 'Do they '};
 defaults.font.name      = 'Arial'; % default font
 defaults.font.size1     = 42; % default font size (smaller)
 defaults.font.size2     = 46; % default font size (bigger)

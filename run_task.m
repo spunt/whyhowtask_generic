@@ -8,8 +8,9 @@ function run_task(test_tag)
     %
     if nargin<1, test_tag = 0; end
 
-    DEVELOPMENT_MODE = 1;
-
+    DEVELOPMENT_MODE = 1; % set this to 1 to skip PTB's standard performance testing
+                          % (Make sure to set back to 0 for actual data collection!)
+    %% INITIAL SETUP
     if DEVELOPMENT_MODE
         Screen('Preference', 'SkipSyncTests', 1);
         fprintf('\n\nWARNING! RUNNING IN DEVELOPMENT MODE!\n\n');
@@ -34,21 +35,16 @@ function run_task(test_tag)
     trigger = KbName(defaults.trigger);
 
     %% Load Design and Setup Seeker Variable %%
-    design = load(fullfile(defaults.path.design, 'design.mat'))
+    [~,designname] = fileparts(defaults.path.design);
+    design = load(fullfile(defaults.path.design, 'design.mat'));
     blockSeeker = design.blockSeeker;
     trialSeeker = design.trialSeeker;
-    trialSeeker(:,6:9) = 0;
+    trialSeeker(:,6:10) = 0;
+    nBlocks = size(blockSeeker, 1);
     nTrialsBlock = length(unique(trialSeeker(:,2)));
-    BOA  = diff([blockSeeker(:,3); design.totalTime]);
-    maxBlockDur = defaults.cueDur + defaults.firstISI + (nTrialsBlock*defaults.maxDur) + (nTrialsBlock-1)*defaults.ISI;
-    BOA   = BOA + (maxBlockDur - min(BOA));
-    eventTimes          = cumsum([defaults.prestartdur; BOA]);
-    blockSeeker(:,3)    = eventTimes(1:end-1);
-    numTRs              = ceil(eventTimes(end)/defaults.TR);
-    totalTime           = defaults.TR*numTRs;
 
     %% Print Defaults %%
-    fprintf('Test Duration:         %d secs (%d TRs)', totalTime, numTRs);
+    fprintf('Test Duration:         %d secs (%d TRs)', design.totalTime, design.numTRs);
     fprintf('\nTrigger Key:           %s', defaults.trigger);
     fprintf(['\nValid Response Keys:   %s' repmat(', %s', 1, length(defaults.valid_keys)-1)], defaults.valid_keys{:});
     fprintf('\nForce Quit Key:        %s\n', defaults.escape);
@@ -82,31 +78,29 @@ function run_task(test_tag)
 
     %% Initialize Logfile (Trialwise Data Recording) %%
     d=clock;
-    logfile=fullfile(defaults.path.data, sprintf('logfile_socns_loi2_design1_sub%s.txt', subjectID));
+    logfile=fullfile(defaults.path.data, sprintf('logfile_loi_%s_sub%s.txt', designname, subjectID));
     fprintf('\nA running log of this session will be saved to %s\n',logfile);
     fid=fopen(logfile,'a');
     if fid<1,error('could not open logfile!');end
     fprintf(fid,'Started: %s %2.0f:%02.0f\n',date,d(4),d(5));
 
     %% Make Images Into Textures %%
-    DrawFormattedText(w.win,sprintf('LOADING\n\n0%% complete'),'center','center',w.white,defaults.font.wrap);
+    DrawFormattedText(w.win,sprintf('LOADING'),'center','center',w.white,defaults.font.wrap);
     Screen('Flip',w.win);
-    slideName = cell(length(design.qim), 1);
-    slideTex = slideName;
-    for i = 1:length(design.qim)
-        slideName{i} = design.qim{i,2};
-        tmp1 = imread([defaults.path.stim filesep 'loi2' filesep slideName{i}]);
-        slideTex{i} = Screen('MakeTexture',w.win,tmp1);
-        DrawFormattedText(w.win,sprintf('LOADING\n\n%d%% complete', ceil(100*i/length(design.qim))),'center','center',w.white,defaults.font.wrap);
+    load(fullfile(defaults.path.stim, 'stimuli.mat'))
+    [~, trialSeeker(:,10)] = ismember(design.qim(:,2), stim.name);
+    slideName = stim.name;
+    slideTex = cell(size(slideName));
+    for i = 1:length(slideName)
+        slideTex{i} = Screen('MakeTexture',w.win,stim.data{i});
         Screen('Flip',w.win);
     end
-    instructTex = Screen('MakeTexture', w.win, imread([defaults.path.stim filesep 'loi2_instruction.jpg']));
+    instructTex = Screen('MakeTexture', w.win, imread([defaults.path.stim filesep 'instruction.jpg']));
     fixTex = Screen('MakeTexture', w.win, imread([defaults.path.stim filesep 'fixation.jpg']));
-    reminderTex = Screen('MakeTexture', w.win, imread([defaults.path.stim filesep 'motion_reminder.jpg']));
 
     %% Get Cues %%
     ordered_questions  = design.preblockcues(blockSeeker(:,4));
-    firstclause = {'Is the person ' 'Is the photo ' 'Is it a result of ' 'Is it going to result in '};
+    firstclause = defaults.question_splitby;
     pbc1 = design.preblockcues;
     pbc2 = pbc1;
     for i = 1:length(firstclause)
@@ -130,6 +124,7 @@ function run_task(test_tag)
     %
     %==========================================================================
 
+
     %% Present Instruction Screen %%
     Screen('DrawTexture',w.win, instructTex); Screen('Flip',w.win);
 
@@ -141,15 +136,17 @@ function run_task(test_tag)
 
     %% Present Motion Reminder %%
     if defaults.motionreminder
-        Screen('DrawTexture',w.win,reminderTex)
+        Screen('DrawTexture',w.win, Screen('MakeTexture', w.win, imread([defaults.path.stim filesep 'motion_reminder.jpg'])))
         Screen('Flip',w.win);
         WaitSecs('UntilTime', anchor + blockSeeker(1,3) - 2);
     end
 
     try
 
-        if test_tag, nBlocks = 1; totalTime = ceil(totalTime/(size(blockSeeker, 1))); % for test run
-        else nBlocks = length(blockSeeker); end
+        if test_tag
+            nBlocks = 1;
+            design.totalTime = ceil(design.totalTime/(size(blockSeeker, 1))); % for test run
+        end
         %======================================================================
         % BEGIN BLOCK LOOP
         %======================================================================
@@ -177,7 +174,7 @@ function run_task(test_tag)
             Screen('FillRect', w.win, w.black);
 
             %% Present Blank Screen Prior to First Trial %%
-            WaitSecs('UntilTime',anchor + blockSeeker(b,3) + defaults.cueDur); Screen('Flip', w.win);
+            WaitSecs('UntilTime',anchor + blockSeeker(b,3) + defaults.preblockquestionDur); Screen('Flip', w.win);
 
             %==================================================================
             % BEGIN TRIAL LOOP
@@ -185,19 +182,14 @@ function run_task(test_tag)
             for t = 1:nTrialsBlock
 
                 %% Prepare Screen for Current Trial %%
-                Screen('DrawTexture',w.win,slideTex{tmpSeeker(t,5)})
-                if t==1, WaitSecs('UntilTime',anchor + blockSeeker(b,3) + defaults.cueDur + defaults.firstISI);
-                else WaitSecs('UntilTime',anchor + offset_dur + defaults.ISI); end
+                Screen('DrawTexture',w.win,slideTex{tmpSeeker(t,10)})
+                WaitSecs('UntilTime',anchor + tmpSeeker(t,5))
 
                 %% Present Screen for Current Trial & Prepare ISI Screen %%
                 Screen('Flip',w.win);
                 onset = GetSecs; tmpSeeker(t,6) = onset - anchor;
-                if t==nTrialsBlock % present fixation after last trial of block
-                    Screen('DrawTexture', w.win, fixTex);
-                else % present question reminder screen between every block trial
-                    Screen('DrawText', w.win, isicue, isicue_x, isicue_y);
-                end
-
+                Screen('DrawTexture', w.win, fixTex);
+                
                 %% Look for Button Press %%
                 [resp, rt] = ptb_get_resp_windowed_noflip(inputDevice, resp_set, defaults.maxDur, defaults.ignoreDur);
                 offset_dur = GetSecs - anchor;
@@ -205,7 +197,7 @@ function run_task(test_tag)
                %% Present ISI, and Look a Little Longer for a Response if None Was Registered %%
                 Screen('Flip', w.win);
                 norespyet = isempty(resp);
-                if norespyet, [resp, rt] = ptb_get_resp_windowed_noflip(inputDevice, resp_set, defaults.ISI*0.90); end
+                if norespyet, [resp, rt] = ptb_get_resp_windowed_noflip(inputDevice, resp_set, defaults.inblockreminderDur*0.90); end
                 if ~isempty(resp)
                     if strcmpi(resp, defaults.escape)
                         ptb_exit; rmpath(defaults.path.utilities)
@@ -215,6 +207,11 @@ function run_task(test_tag)
                     tmpSeeker(t,7) = rt + (defaults.maxDur*norespyet);
                 end
                 tmpSeeker(t,9) = offset_dur;
+                if t < nTrialsBlock
+                    Screen('DrawText', w.win, isicue, isicue_x, isicue_y);
+                    WaitSecs('UntilTime', anchor + tmpSeeker(t+1,5) - defaults.inblockreminderDur);
+                    Screen('Flip',w.win);
+                end
 
             end % END TRIAL LOOP
 
@@ -225,7 +222,7 @@ function run_task(test_tag)
         end % END BLOCK LOOP
 
         %% Present Fixation Screen Until End of Scan %%
-        WaitSecs('UntilTime', anchor + totalTime);
+        WaitSecs('UntilTime', anchor + design.totalTime);
 
     catch
 
@@ -235,22 +232,22 @@ function run_task(test_tag)
 
     end
 
-    %% Create Results Structure %%
-    result.blockSeeker  = blockSeeker;
-    result.trialSeeker  = trialSeeker;
-    result.qim          = design.qim;
-    result.qdata        = design.qdata;
-    result.preblockcues = design.preblockcues;
-    result.isicues      = design.isicues;
-
-    %% Save Data to Matlab Variable %%
-    d=clock;
-    outfile=sprintf('socns_loi2_design1_%s_%s_%02.0f-%02.0f.mat',subjectID,date,d(4),d(5));
     try
-        save([defaults.path.data filesep outfile], 'subjectID', 'result', 'slideName', 'defaults');
+        %% Create Results Structure %%
+        result.blockSeeker  = blockSeeker;
+        result.trialSeeker  = trialSeeker;
+        result.qim          = design.qim;
+        result.slidename    = slideName;
+        result.preblockcues = design.preblockcues;
+        result.isicues      = design.isicues;
+
+        %% Save Data to Matlab Variable %%
+        d=clock;
+        outfile=sprintf('loi_%s_%s_%s_%02.0f-%02.0f.mat', subjectID, designname, date, d(4),d(5));
+        save(fullfile(defaults.path.data, outfile), 'subjectID', 'result', 'defaults');
     catch
-        fprintf('couldn''t save %s\n saving to socns_loi2.mat\n',outfile);
-        save socns_loi2.mat
+        fprintf('couldn''t save %s\n saving to loi.mat\n', outfile);
+        save loi.mat
     end
 
     %% End of Test Screen %%
@@ -265,10 +262,10 @@ function run_task(test_tag)
         disp('Backing up data... please wait.');
         if test_tag
             emailto = {'bobspunt@gmail.com'};
-            emailsubject = '[TEST RUN] Conte Social/Nonsocial LOI2 Behavioral Data';
+            emailsubject = '[TEST RUN] LOI Behavioral Data';
         else
             emailto = {'bobspunt@gmail.com','conte3@caltech.edu'};
-            emailsubject = 'Conte Social/Nonsocial LOI2 Behavioral Data';
+            emailsubject = 'LOI Behavioral Data';
         end
         emailbackup(emailto, emailsubject, 'See attached.', [defaults.path.data filesep outfile]);
         disp('All done!');
